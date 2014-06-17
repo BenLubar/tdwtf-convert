@@ -12,7 +12,7 @@ class ImportScripts::CommunityServer < ImportScripts::Base
     users = CSV.read('tdwtf-users.csv', headers: true)
     create_users(users) do |u|
       avatar = u.delete('avatar').first
-      @avatars[u['id']] = avatar.unpack('H*').first unless avatar.empty?
+      @avatars[u['id']] = avatar.unpack('H*').first unless avatar == 'NULL'
       ActiveSupport::HashWithIndifferentAccess.new u.to_hash
     end
 
