@@ -8,9 +8,22 @@ class ImportScripts::CommunityServer < ImportScripts::Base
   end
 
   def execute
+    @avatars = {}
     users = CSV.read('tdwtf-users.csv', headers: true)
     create_users(users) do |u|
+      avatar = u.delete('avatar').first
+      @avatars[u['id']] = avatar.unpack('H*').first unless avatar.empty?
       ActiveSupport::HashWithIndifferentAccess.new u.to_hash
+    end
+
+    @avatars.each do |id, a|
+      u = user_id_from_imported_user_id(id)
+      unless u.has_uploaded_avatar
+        u.create_user_avatar(user_id: u.id) unless user.user_avatar
+        u.user_avatar.uploaded_avatar = u.uploaded_avatar = Upload.create_for(u.id, StringIO.new(a), 'community-server-avatar.jpg', a.size)
+        u.user_avatar.save!
+        u.save!
+      end
     end
 
     # begin specific to TDWTF
