@@ -38,6 +38,8 @@ class ImportScripts::CommunityServer < ImportScripts::Base
         u.save!
       end
     end
+    print_status i, @avatars.size
+    puts
 
     # begin specific to TDWTF
     {'18' => 10, '16' => 13, '17' => 17, '19' => 14, '21' => 4}.each do |cs, dc|
@@ -61,6 +63,7 @@ class ImportScripts::CommunityServer < ImportScripts::Base
     CSV.open('tdwtf-posts.csv', headers: true) do |posts|
       posts.each do |p|
         count += 1
+        print_status count, p['id']
       end
     end
 
@@ -76,7 +79,7 @@ class ImportScripts::CommunityServer < ImportScripts::Base
             created_at: p['created_at'],
             raw: transform_post(p['raw'], p['tags']),
             title: p['title'],
-            category: category_from_imported_category_id(p['category']),
+            category: category_from_imported_category_id(p['category']).id,
             meta_data: {'import_id' => p['topic']}
           }
         else
@@ -86,7 +89,7 @@ class ImportScripts::CommunityServer < ImportScripts::Base
             created_at: p['created_at'],
             raw: transform_post(p['raw'], p['tags'], unless p['title'] == 'Re: ' + @post_titles[p['parent']].gsub(/^Re: /, '') then p['title'] end),
             title: p['title'],
-            category: category_from_imported_category_id(p['category'])
+            category: category_from_imported_category_id(p['category']).id
           }
         end
       end
