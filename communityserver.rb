@@ -63,34 +63,44 @@ class ImportScripts::CommunityServer < ImportScripts::Base
     CSV.open('tdwtf-posts.csv', headers: true) do |posts|
       posts.each do |p|
         count += 1
-        print_status count, p['id']
+        print "\r#{count}"
       end
     end
+    puts
+
+    puts '', 'migrating posts'
 
     @post_titles = {}
 
     CSV.open('tdwtf-posts.csv', headers: true) do |posts|
       create_posts(posts, total: count) do |p|
-        @post_titles[p['id']] = p['title']
-        if p['id'] == p['parent'] # first post in topic
-          {
-            id: p['id'],
-            user_id: user_id_from_imported_user_id(p['author']),
-            created_at: p['created_at'],
-            raw: transform_post(p['raw'], p['tags']),
-            title: p['title'],
-            category: category_from_imported_category_id(p['category']).id,
-            meta_data: {'import_id' => p['topic']}
-          }
+        unless category_from_imported_category_id(p['category'])
+          nil
         else
-          {
-            id: p['id'],
-            user_id: user_id_from_imported_user_id(p['author']),
-            created_at: p['created_at'],
-            raw: transform_post(p['raw'], p['tags'], unless p['title'] == 'Re: ' + @post_titles[p['parent']].gsub(/^Re: /, '') then p['title'] end),
-            title: p['title'],
-            category: category_from_imported_category_id(p['category']).id
-          }
+          @post_titles[p['id']] = p['title']
+          if p['id'] == p['parent'] # first post in topic
+            {
+              id: p['id'],
+              user_id: user_id_from_imported_user_id(p['author']),
+              created_at: p['created_at'],
+              raw: transform_post(p['raw'], p['tags']),
+              title: p['title'],
+              category: category_from_imported_category_id(p['category']).id,
+              meta_data: {'import_id' => p['topic']}
+            }
+          else
+            parent = topic_lookup_from_imported_post_id(p['parent'])
+            if parent
+              {
+                id: p['id'],
+                user_id: user_id_from_imported_user_id(p['author']),
+                created_at: p['created_at'],
+                raw: transform_post(p['raw'], p['tags'], unless p['title'] == 'Re: ' + @post_titles[p['parent']].gsub(/^Re: /, '') then p['title'] end),
+                topic_id: parent[:topic_id],
+                reply_to_post_number: parent[:post_number]
+              }
+            end
+          end
         end
       end
     end
@@ -105,6 +115,7 @@ class ImportScripts::CommunityServer < ImportScripts::Base
     unless tags.empty?
       raw += "\n\n---\nFiled under: [#{tags.split(', ').join('](#tag), [')}](#tag)\n"
     end
+    raw
   end
 end
 
