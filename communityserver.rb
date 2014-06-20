@@ -74,6 +74,13 @@ class ImportScripts::CommunityServer < ImportScripts::Base
 
     CSV.open('tdwtf-posts.csv', headers: true) do |posts|
       create_posts(posts, total: count) do |p|
+        while (enqueued = Sidekiq::Stats.new.enqueued) > 10
+          waitmessage = "\rWaiting for Sidekiq to catch up (#{enqueued})"
+          print waitmessage
+          sleep 1
+          print "\r" + ' ' * waitmessage.size
+        end
+
         unless category_from_imported_category_id(p['category'])
           nil
         else
