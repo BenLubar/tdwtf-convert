@@ -42,7 +42,7 @@ class ImportScripts::CommunityServer < ImportScripts::Base
     puts
 
     # begin specific to TDWTF
-    {'18' => 10, '16' => 13, '17' => 17, '19' => 14, '21' => 4}.each do |cs, dc|
+    {'18' => 10, '16' => 13, '17' => 17, '19' => 14, '21' => 4, '26' => 20}.each do |cs, dc|
       c = Category.find(dc)
       c.custom_fields['import_id'] = cs
       c.save!
