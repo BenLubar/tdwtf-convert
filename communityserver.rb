@@ -32,7 +32,7 @@ class ImportScripts::CommunityServer < ImportScripts::Base
         f = Tempfile.new('csavatar')
         f.write(a)
         f.close
-        u.user_avatar.custom_upload = u.uploaded_avatar = Upload.create_for(u.id, f.path, 'community-server-avatar.jpg', a.size)
+        u.user_avatar.custom_upload = u.uploaded_avatar = Upload.create_for(u.id, f, 'community-server-avatar.jpg', File.size(f.path))
         f.unlink
         u.user_avatar.save!
         u.save!
@@ -43,10 +43,14 @@ class ImportScripts::CommunityServer < ImportScripts::Base
 
     # begin specific to TDWTF
     {'18' => 10, '16' => 13, '17' => 17, '19' => 14, '21' => 4, '26' => 20}.each do |cs, dc|
-      c = Category.find(dc)
-      c.custom_fields['import_id'] = cs
-      c.save!
-      @categories[cs] = c
+      begin
+        c = Category.find(dc)
+        c.custom_fields['import_id'] = cs
+        c.save!
+        @categories[cs] = c
+      rescue ActiveRecord::RecordNotFound
+        # ignore
+      end
     end
     # end specific to TDWTF
 
@@ -54,6 +58,7 @@ class ImportScripts::CommunityServer < ImportScripts::Base
 
     categories = CSV.read('tdwtf-categories.csv', headers: true)
     create_categories(categories) do |c|
+      c['name'] = transform_title(c['name'])
       ActiveSupport::HashWithIndifferentAccess.new c.to_hash
     end
 
@@ -72,16 +77,19 @@ class ImportScripts::CommunityServer < ImportScripts::Base
 
     @post_titles = {}
 
+    stats = Sidekiq::Stats.new
+
     CSV.open('tdwtf-posts.csv', headers: true) do |posts|
       create_posts(posts, total: count) do |p|
-        while (enqueued = Sidekiq::Stats.new.enqueued) > 10
-          waitmessage = "\rWaiting for Sidekiq to catch up (#{enqueued})"
-          print waitmessage
-          sleep 1
-          print "\r" + ' ' * waitmessage.size
+        while (enqueued = stats.enqueued) > 10
+          waitmessage = "Waiting for Sidekiq to catch up (#{enqueued})"
+          print "\r", waitmessage
+          sleep 15
+          print "\r", ' ' * waitmessage.size
         end
 
         unless category_from_imported_category_id(p['category'])
+          puts "Skipping post #{p['id']}: category #{p['category']} not found"
           nil
         else
           @post_titles[p['id']] = p['title']
@@ -91,7 +99,7 @@ class ImportScripts::CommunityServer < ImportScripts::Base
               user_id: user_id_from_imported_user_id(p['author']),
               created_at: p['created_at'],
               raw: transform_post(p['raw'], p['tags']),
-              title: p['title'],
+              title: transform_title(p['title']),
               category: category_from_imported_category_id(p['category']).id,
               meta_data: {'import_id' => p['topic']}
             }
@@ -106,6 +114,9 @@ class ImportScripts::CommunityServer < ImportScripts::Base
                 topic_id: parent[:topic_id],
                 reply_to_post_number: parent[:post_number]
               }
+            else
+              puts "Skipping post #{p['id']}: parent post #{p['parent']} not found"
+              nil
             end
           end
         end
@@ -114,14 +125,23 @@ class ImportScripts::CommunityServer < ImportScripts::Base
   end
 
   def transform_post raw, tags, title=nil
-    raw.gsub!(/([\*#_`])/, '\\\1')
-    raw.gsub!("[quote user=\"", "[quote=\"")
+    raw.gsub! /([\*#_`])/, '\\\1'
+    raw.gsub! "[quote user=\"", "[quote=\""
     if title
       raw = "##{title}\n\n#{raw}"
     end
     unless tags.empty?
-      raw += "\n\n---\nFiled under: [#{tags.split(', ').join('](#tag), [')}](#tag)\n"
+      raw << "\n\n---\nFiled under: [#{tags.split(', ').join('](#tag), [')}](#tag)\n"
     end
+    raw
+  end
+
+  def transform_title raw
+    raw.gsub! "&lt;", "<"
+    raw.gsub! "&gt;", ">"
+    raw.gsub! "&quot;", '"'
+    raw.gsub! "&#39;", "'"
+    raw.gsub! "&amp;", "&"
     raw
   end
 end
