@@ -31,8 +31,9 @@ class ImportScripts::CommunityServer < ImportScripts::Base
         u.create_user_avatar(user_id: u.id) unless u.user_avatar
         f = Tempfile.new('csavatar')
         f.write(a)
-        f.close
+        f.flush
         u.user_avatar.custom_upload = u.uploaded_avatar = Upload.create_for(u.id, f, 'community-server-avatar.jpg', File.size(f.path))
+        f.close
         f.unlink
         u.user_avatar.save!
         u.save!
@@ -40,6 +41,8 @@ class ImportScripts::CommunityServer < ImportScripts::Base
     end
     print_status i, @avatars.size
     puts
+
+    #SiteSetting.queue_jobs = false
 
     # begin specific to TDWTF
     {'18' => 10, '16' => 13, '17' => 17, '19' => 14, '21' => 4, '26' => 20}.each do |cs, dc|
