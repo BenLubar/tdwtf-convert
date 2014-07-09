@@ -113,7 +113,7 @@ class ImportScripts::CommunityServer < ImportScripts::Base
                 id: p['id'],
                 user_id: user_id_from_imported_user_id(p['author']),
                 created_at: p['created_at'],
-                raw: transform_post(p['raw'], p['tags'], unless p['title'] == 'Re: ' + @post_titles[p['parent']].gsub(/^Re: /, '') then p['title'] end),
+                raw: transform_post(p['raw'], p['tags'], unless p['title'] == 'Re: ' + (@post_titles[p['parent']] || '').gsub(/^Re: /, '') then p['title'] end),
                 topic_id: parent[:topic_id],
                 reply_to_post_number: parent[:post_number]
               }
